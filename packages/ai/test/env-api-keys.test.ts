@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
 
 const originalCopilotGitHubToken = process.env.COPILOT_GITHUB_TOKEN;
@@ -56,5 +56,61 @@ describe("environment API keys", () => {
 
 		expect(findEnvKeys("zai-coding-cn")).toEqual(["ZAI_CODING_CN_API_KEY"]);
 		expect(getEnvApiKey("zai-coding-cn")).toBe("zai-coding-cn-token");
+	});
+});
+
+describe("Google Vertex ADC detection", () => {
+	const VERTEX_ENV_VARS = [
+		"GOOGLE_CLOUD_PROJECT",
+		"GCLOUD_PROJECT",
+		"GOOGLE_CLOUD_LOCATION",
+		"GOOGLE_APPLICATION_CREDENTIALS",
+		"GOOGLE_CLOUD_API_KEY",
+	];
+	const originalVertexEnv = Object.fromEntries(VERTEX_ENV_VARS.map((name) => [name, process.env[name]]));
+
+	beforeEach(() => {
+		// Isolate from the host's real Google credentials so detection is deterministic.
+		for (const name of VERTEX_ENV_VARS) delete process.env[name];
+	});
+
+	afterEach(() => {
+		for (const name of VERTEX_ENV_VARS) {
+			const value = originalVertexEnv[name];
+			if (value === undefined) delete process.env[name];
+			else process.env[name] = value;
+		}
+	});
+
+	// A credentials-file path that does not exist: on GCE / Workload Identity the
+	// metadata server (resolved by @google/genai at request time) provides ADC,
+	// so availability detection must not require a local credentials file.
+	const noCredFile = {
+		GOOGLE_APPLICATION_CREDENTIALS: "/nonexistent/pi-test/application_default_credentials.json",
+	};
+
+	it("treats Vertex as authenticated from project + location without a local credentials file", () => {
+		const env = { ...noCredFile, GOOGLE_CLOUD_PROJECT: "my-project", GOOGLE_CLOUD_LOCATION: "us-central1" };
+
+		expect(getEnvApiKey("google-vertex", env)).toBe("<authenticated>");
+	});
+
+	it("does not authenticate Vertex when project is missing", () => {
+		const env = { ...noCredFile, GOOGLE_CLOUD_LOCATION: "us-central1" };
+
+		expect(getEnvApiKey("google-vertex", env)).toBeUndefined();
+	});
+
+	it("does not authenticate Vertex when location is missing", () => {
+		const env = { ...noCredFile, GOOGLE_CLOUD_PROJECT: "my-project" };
+
+		expect(getEnvApiKey("google-vertex", env)).toBeUndefined();
+	});
+
+	it("resolves an explicit Vertex API key from GOOGLE_CLOUD_API_KEY", () => {
+		const env = { GOOGLE_CLOUD_API_KEY: "vertex-api-key" };
+
+		expect(findEnvKeys("google-vertex", env)).toEqual(["GOOGLE_CLOUD_API_KEY"]);
+		expect(getEnvApiKey("google-vertex", env)).toBe("vertex-api-key");
 	});
 });
