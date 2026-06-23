@@ -59,6 +59,7 @@ export interface SettingsConfig {
 	followUpMode: "all" | "one-at-a-time";
 	transport: Transport;
 	httpIdleTimeoutMs: number;
+	defaultModelLabel: string;
 	thinkingLevel: ThinkingLevel;
 	availableThinkingLevels: ThinkingLevel[];
 	currentTheme: string;
@@ -90,6 +91,7 @@ export interface SettingsCallbacks {
 	onFollowUpModeChange: (mode: "all" | "one-at-a-time") => void;
 	onTransportChange: (transport: Transport) => void;
 	onHttpIdleTimeoutMsChange: (timeoutMs: number) => void;
+	onDefaultModelSubmenu: (done: (selectedValue?: string) => void) => Container;
 	onThinkingLevelChange: (level: ThinkingLevel) => void;
 	onThemeChange: (theme: string) => void;
 	onThemePreview?: (theme: string) => void;
@@ -575,6 +577,13 @@ export class SettingsSelectorComponent extends Container {
 						},
 						() => done(),
 					),
+			},
+			{
+				id: "default-model",
+				label: "Default model",
+				description: "Global default model for new sessions",
+				currentValue: config.defaultModelLabel,
+				submenu: (_currentValue, done) => callbacks.onDefaultModelSubmenu(done),
 			},
 			{
 				id: "thinking",

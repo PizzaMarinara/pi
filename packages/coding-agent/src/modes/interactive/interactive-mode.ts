@@ -3958,6 +3958,15 @@ export class InteractiveMode {
 	}
 
 	private showSettingsSelector(): void {
+		const persistedProvider = this.settingsManager.getDefaultProvider();
+		const persistedModelId = this.settingsManager.getDefaultModel();
+		const sessionModel = this.session.model;
+		const defaultModelLabel =
+			persistedProvider && persistedModelId
+				? persistedModelId
+				: sessionModel
+					? `${sessionModel.name || sessionModel.id} (session-only)`
+					: "(none)";
 		this.showSelector((done) => {
 			const selector = new SettingsSelectorComponent(
 				{
@@ -3971,7 +3980,8 @@ export class InteractiveMode {
 					followUpMode: this.session.followUpMode,
 					transport: this.settingsManager.getTransport(),
 					httpIdleTimeoutMs: this.settingsManager.getHttpIdleTimeoutMs(),
-					thinkingLevel: this.session.thinkingLevel,
+					defaultModelLabel,
+					thinkingLevel: this.settingsManager.getDefaultThinkingLevel() ?? this.session.thinkingLevel,
 					availableThinkingLevels: this.session.getAvailableThinkingLevels(),
 					currentTheme: this.settingsManager.getThemeSetting() || "dark",
 					terminalTheme: this.themeController.getTerminalTheme(),
@@ -4036,8 +4046,38 @@ export class InteractiveMode {
 						configureHttpDispatcher(timeoutMs);
 						this.showStatus(`HTTP idle timeout: ${formatHttpIdleTimeoutMs(timeoutMs)}`);
 					},
+					onDefaultModelSubmenu: (done) => {
+						const persistedModel =
+							persistedProvider && persistedModelId
+								? this.session.modelRegistry.find(persistedProvider, persistedModelId)
+								: undefined;
+						return new ModelSelectorComponent(
+							this.ui,
+							persistedModel ?? this.session.model,
+							this.session.modelRegistry,
+							this.session.scopedModels,
+							async (model) => {
+								try {
+									// `/settings` is the explicit surface for the persisted default model.
+									await this.session.setModel(model, { persist: true });
+									this.footer.invalidate();
+									this.updateEditorBorderColor();
+									done(`${model.provider}:${model.id}`);
+									this.showStatus(`Default model: ${model.name || model.id}`);
+									void this.maybeWarnAboutAnthropicSubscriptionAuth(model);
+								} catch (error) {
+									done();
+									this.showError(error instanceof Error ? error.message : String(error));
+								}
+							},
+							() => done(),
+						);
+					},
 					onThinkingLevelChange: (level) => {
-						this.session.setThinkingLevel(level);
+						// `/settings` is the canonical surface for changing the persisted
+						// default thinking level. All other surfaces (Ctrl+T cycling,
+						// /model, extension RPC) stay ephemeral.
+						this.session.setThinkingLevel(level, { persist: true });
 						this.footer.invalidate();
 						this.updateEditorBorderColor();
 					},
@@ -4250,7 +4290,6 @@ export class InteractiveMode {
 			const selector = new ModelSelectorComponent(
 				this.ui,
 				this.session.model,
-				this.settingsManager,
 				this.session.modelRegistry,
 				this.session.scopedModels,
 				async (model) => {
@@ -4804,7 +4843,9 @@ export class InteractiveMode {
 					selectionError = `${actionLabel}, but its default model "${defaultModelId}" is not available. Use /model to select a model.`;
 				} else {
 					try {
-						await this.session.setModel(selectedModel);
+						// Onboarding/auth completion: persist the freshly chosen provider's
+						// default model so future sessions inherit it.
+						await this.session.setModel(selectedModel, { persist: true });
 					} catch (error: unknown) {
 						selectedModel = undefined;
 						const errorMessage = error instanceof Error ? error.message : String(error);
