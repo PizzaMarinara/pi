@@ -681,6 +681,12 @@ export interface BeforeProviderPayloadResult {
 export interface ToolCallResult {
 	block?: boolean;
 	reason?: string;
+	/**
+	 * Hint that the agent should stop after the current tool batch.
+	 * Only honored when `block` is true; termination happens when every finalized tool result
+	 * in the batch carries the hint.
+	 */
+	terminate?: boolean;
 }
 
 export interface ToolResultPatch {

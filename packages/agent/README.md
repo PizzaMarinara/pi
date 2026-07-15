@@ -194,6 +194,8 @@ const agent = new Agent({
   toolExecution: "parallel",
 
   // Preflight each tool call after args are validated. Can block execution.
+  // A blocking result may also set terminate: true to mark the blocked error
+  // result with the same early-termination hint executing tools can return.
   beforeToolCall: async ({ toolCall, args, context }) => {
     if (toolCall.name === "bash") {
       return { block: true, reason: "bash is disabled" };

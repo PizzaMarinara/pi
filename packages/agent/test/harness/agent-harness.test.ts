@@ -465,6 +465,47 @@ describe("AgentHarness", () => {
 		});
 	});
 
+	it("forwards terminate from a blocking tool_call hook to end the turn", async () => {
+		const registration = newFaux();
+		let providerCalls = 0;
+		registration.setResponses([
+			() => {
+				providerCalls++;
+				return fauxAssistantMessage(fauxToolCall("calculate", { expression: "2 + 2" }, { id: "call-1" }), {
+					stopReason: "toolUse",
+				});
+			},
+			() => {
+				providerCalls++;
+				return fauxAssistantMessage("should not be requested");
+			},
+		]);
+		const session = new Session(new InMemorySessionStorage());
+		const harness = new AgentHarness({
+			models,
+			env: new NodeExecutionEnv({ cwd: process.cwd() }),
+			session,
+			model: registration.getModel(),
+			tools: [calculateTool],
+		});
+		harness.on("tool_call", () => ({ block: true, reason: "blocked by hook", terminate: true }));
+
+		await harness.prompt("hello");
+
+		expect(providerCalls).toBe(1);
+		const toolResult = (await session.getEntries()).find(
+			(entry) => entry.type === "message" && entry.message.role === "toolResult",
+		);
+		expect(toolResult).toMatchObject({
+			type: "message",
+			message: {
+				role: "toolResult",
+				isError: true,
+				content: [{ type: "text", text: "blocked by hook" }],
+			},
+		});
+	});
+
 	it("preserves app tool types for getters and update events", async () => {
 		const session = new Session(new InMemorySessionStorage());
 		const env = new NodeExecutionEnv({ cwd: process.cwd() });

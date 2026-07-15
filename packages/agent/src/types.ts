@@ -60,6 +60,12 @@ export type AgentToolCall = Extract<AssistantMessage["content"][number], { type:
 export interface BeforeToolCallResult {
 	block?: boolean;
 	reason?: string;
+	/**
+	 * Hint that the agent should stop after the current tool batch.
+	 * Only honored when `block` is true; the blocked error tool result carries it into the
+	 * batch-wide rule, which terminates only when every finalized tool result in the batch sets it.
+	 */
+	terminate?: boolean;
 }
 
 /**

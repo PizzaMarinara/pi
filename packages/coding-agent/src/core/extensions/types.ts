@@ -1057,6 +1057,12 @@ export interface ToolCallEventResult {
 	/** Block tool execution. To modify arguments, mutate `event.input` in place instead. */
 	block?: boolean;
 	reason?: string;
+	/**
+	 * Hint that the agent should stop after the current tool batch.
+	 * Only honored when `block` is true; termination happens when every finalized tool result
+	 * in the batch carries the hint.
+	 */
+	terminate?: boolean;
 }
 
 /** Result from user_bash event handler */

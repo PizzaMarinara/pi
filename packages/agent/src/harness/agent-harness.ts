@@ -416,7 +416,7 @@ export class AgentHarness<
 					toolName: toolCall.name,
 					input: args as Record<string, unknown>,
 				});
-				return result ? { block: result.block, reason: result.reason } : undefined;
+				return result ? { block: result.block, reason: result.reason, terminate: result.terminate } : undefined;
 			},
 			afterToolCall: async ({ toolCall, args, result, isError }) => {
 				const patch = await this.emitHook({
